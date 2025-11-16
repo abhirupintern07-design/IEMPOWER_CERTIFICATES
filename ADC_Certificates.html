@@ -1,4 +1,5 @@
 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -65,10 +66,11 @@
                 <div>
                     <label for="userEmail" class="block text-sm font-medium text-gray-700">2. College Email ID (For verification)</label>
                     <input type="email" id="userEmail" placeholder="e.g., user@college.edu"
-                        class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:ring-indigo-500 focus:border-indigo-500">
+                        class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:ring-indigo-500 focus:border-indigo-500"
+                        oninput="drawCertificate()">
                 </div>
                 
-                <!-- Download Button (Changed to a Link visually) -->
+                <!-- Download Link -->
                 <a id="downloadLink" href="#" onclick="downloadCertificate()" style="pointer-events: none;"
                     class="w-full mt-6 flex justify-center items-center py-3 px-6 border border-transparent text-base font-medium rounded-full shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 opacity-50 cursor-not-allowed">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -85,7 +87,8 @@
                         Loading fixed template...
                     </p>
                 </div>
-                <div id="messageBox" class="mt-4 p-3 bg-red-100 text-red-700 rounded-lg hidden" role="alert"></div>
+                <!-- Message Box for Errors/Success -->
+                <div id="messageBox" class="mt-4 p-3 rounded-lg hidden" role="alert"></div>
             </div>
         </div>
     </div>
@@ -97,10 +100,10 @@
         const templateImage = new Image();
         let isTemplateLoaded = false;
         const placeholderText = document.getElementById('placeholderText');
-        const downloadLink = document.getElementById('downloadLink'); // Renamed from downloadBtn
+        const downloadLink = document.getElementById('downloadLink');
         const messageBox = document.getElementById('messageBox');
         
-        // HARDCODED TEMPLATE URL (Corrected to be the accessible file name)
+        // HARDCODED TEMPLATE URL (Used the file name from your repository)
         const FIXED_TEMPLATE_URL = '2ND RUNNERS UP.jpg';
         
         // Hardcoded optimal text styles for the template
@@ -109,7 +112,7 @@
         const FONT_COLOR = '#013460'; // Dark blue/indigo
 
         /**
-         * Utility function to toggle the download link state.
+         * Utility function to toggle the download link state and appearance.
          * @param {boolean} enable - True to enable the link, False to disable.
          */
         function toggleDownloadLink(enable) {
@@ -135,6 +138,8 @@
             } else {
                 messageBox.classList.add('bg-green-100', 'text-green-700');
             }
+            // Ensure the message box is visible
+            messageBox.classList.remove('hidden');
         }
 
         /**
@@ -149,17 +154,18 @@
                 canvas.width = templateImage.width;
                 canvas.height = templateImage.height;
                 isTemplateLoaded = true;
-                toggleDownloadLink(true);
-                drawCertificate();
+                drawCertificate(); // Initial draw with blank name
                 placeholderText.classList.add('hidden');
-                showMessage('Certificate template loaded successfully. Enter your full name.', false);
+                showMessage('Certificate template loaded successfully. Enter your details below.', false);
             };
             
-            templateImage.onerror = () => {
+            templateImage.onerror = (e) => {
                 isTemplateLoaded = false;
                 toggleDownloadLink(false);
-                showMessage('Error loading the certificate template image. Please check the console for details.', true);
-                placeholderText.textContent = "Error: Template image failed to load.";
+                // CRITICAL: Log a specific error related to file access on GitHub Pages
+                console.error('Image loading failed. Check if "2ND RUNNERS UP.jpg" is in the same folder as the HTML file and the file name case is correct.', e);
+                placeholderText.textContent = "Error: Template image failed to load. (Check file name casing: 2ND RUNNERS UP.jpg)";
+                showMessage('CRITICAL ERROR: The template image could not be loaded. Please ensure the file "2ND RUNNERS UP.jpg" is uploaded to the root of your GitHub repository.', true);
             };
 
             // Start loading the image
@@ -171,44 +177,51 @@
          */
         function drawCertificate() {
             if (!isTemplateLoaded) {
+                // Template isn't ready, cannot draw.
+                toggleDownloadLink(false);
                 return;
             }
 
-            // We use .toUpperCase() here to match the style of the existing template text
             const userName = document.getElementById('userName').value.trim().toUpperCase(); 
+            const userEmail = document.getElementById('userEmail').value.trim();
             
             // 1. Clear and Draw Template
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
 
-            if (userName.length === 0) {
-                // No name entered, just show the template
-                toggleDownloadLink(false);
-                return;
-            }
-            
-            // Check if email is valid to enable link (since it's required for download)
-            const userEmail = document.getElementById('userEmail').value.trim();
-            if (userName.length > 2 && userEmail.includes('@') && userEmail.includes('.')) {
-                toggleDownloadLink(true);
-            } else {
-                toggleDownloadLink(false);
+            // 2. Determine Download Readiness (Validation)
+            const isNameValid = userName.length >= 3;
+            const isEmailValid = userEmail.includes('@') && userEmail.includes('.');
+            const isReadyToDownload = isNameValid && isEmailValid;
+
+            toggleDownloadLink(isReadyToDownload);
+
+            if (!isReadyToDownload) {
+                // Check if we need to show a guiding message when link is disabled
+                if (userName.length > 0) {
+                    messageBox.classList.add('hidden'); // Hide simple message if actively typing
+                }
             }
 
-            // 2. Configure Text Style using hardcoded constants
+
+            if (userName.length === 0) {
+                return; // Stop drawing text if no name is entered
+            }
+            
+            // 3. Configure Text Style using hardcoded constants
             const yPosition = (canvas.height * Y_POS_PERCENT) / 100;
             const xPosition = canvas.width / 2;
 
-            // Use a bold, professional font that suits the certificate style
+            // Use a bold, professional font
             ctx.font = `bold ${FONT_SIZE_PX}px Open Sans, serif`; 
             ctx.fillStyle = FONT_COLOR;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // 3. Draw the Name
+            // 4. Draw the Name
             ctx.fillText(userName, xPosition, yPosition);
 
-            // Hide error message if name is being drawn
+            // Hide previous message once name is drawn
             messageBox.classList.add('hidden');
         }
 
@@ -218,21 +231,24 @@
         function downloadCertificate() {
             const userName = document.getElementById('userName').value.trim();
             const userEmail = document.getElementById('userEmail').value.trim();
+            
+            // Re-validate just before download attempt
+            const isNameValid = userName.length >= 3;
+            const isEmailValid = userEmail.includes('@') && userEmail.includes('.');
 
             if (!isTemplateLoaded) {
-                showMessage('The certificate template is not loaded.');
-                return;
+                showMessage('The certificate template is not loaded. Cannot download.', true);
+                return false;
             }
 
-            if (userName.length < 3) {
-                showMessage('Please enter your full name before downloading.');
-                return;
+            if (!isNameValid) {
+                showMessage('ERROR: Please enter your full name (at least 3 characters) to enable download.', true);
+                return false;
             }
             
-            // Simple email validation
-            if (!userEmail || !userEmail.includes('@') || !userEmail.includes('.')) {
-                showMessage('Please enter a valid email ID for documentation purposes.');
-                return;
+            if (!isEmailValid) {
+                showMessage('ERROR: Please enter a valid email ID (must include @ and .) to enable download.', true);
+                return false;
             }
 
             // Ensure the final rendering is on the canvas
@@ -241,7 +257,6 @@
             // Create a temporary link element for downloading
             const link = document.createElement('a');
             link.download = `IEMPOWER_Certificate_${userName.replace(/\s/g, '_')}.png`;
-            // Set the href attribute to the generated image data URL
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
@@ -249,9 +264,6 @@
 
             showMessage('Certificate downloaded successfully!', false);
         }
-        
-        // Add event listener to email input to re-check download readiness
-        document.getElementById('userEmail').addEventListener('input', drawCertificate);
 
         window.onload = function() {
             // Load the fixed template when the page loads
