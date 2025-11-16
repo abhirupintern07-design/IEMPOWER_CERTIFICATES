@@ -1,0 +1,262 @@
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Certificate Generator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind to use Inter font and enable JIT mode -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* General styling for the body */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* Style the canvas container and the canvas itself */
+        #canvasContainer {
+            /* Set a fixed aspect ratio for the preview based on the template image (approx 16:10 or 8:5) */
+            aspect-ratio: 1.6 / 1; 
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 2px dashed #cbd5e1; /* slate-300 */
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10 border border-gray-100">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-2">IEMPOWER 2025 Certificate Personalizer</h1>
+        <p class="text-gray-500 mb-8">The official certificate template is loaded. Please enter your details below to generate your personalized copy.</p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Input Panel -->
+            <div class="lg:col-span-1 space-y-6">
+                
+                <!-- Name Input -->
+                <div>
+                    <label for="userName" class="block text-sm font-medium text-gray-700">1. Your Full Name (As it should appear)</label>
+                    <input type="text" id="userName" placeholder="e.g., Jane Doe"
+                        class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:ring-indigo-500 focus:border-indigo-500"
+                        oninput="drawCertificate()">
+                </div>
+
+                <!-- Email Input -->
+                <div>
+                    <label for="userEmail" class="block text-sm font-medium text-gray-700">2. College Email ID (For verification)</label>
+                    <input type="email" id="userEmail" placeholder="e.g., user@college.edu"
+                        class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                
+                <!-- Download Button (Changed to a Link visually) -->
+                <a id="downloadLink" href="#" onclick="downloadCertificate()" style="pointer-events: none;"
+                    class="w-full mt-6 flex justify-center items-center py-3 px-6 border border-transparent text-base font-medium rounded-full shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 opacity-50 cursor-not-allowed">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Generate & Download Certificate (PNG)
+                </a>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="lg:col-span-2">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">3. Live Preview</h2>
+                <div id="canvasContainer" class="w-full">
+                    <canvas id="certificateCanvas"></canvas>
+                    <p id="placeholderText" class="text-gray-500 p-8 text-center text-lg">
+                        Loading fixed template...
+                    </p>
+                </div>
+                <div id="messageBox" class="mt-4 p-3 bg-red-100 text-red-700 rounded-lg hidden" role="alert"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants and Globals
+        const canvas = document.getElementById('certificateCanvas');
+        const ctx = canvas.getContext('2d');
+        const templateImage = new Image();
+        let isTemplateLoaded = false;
+        const placeholderText = document.getElementById('placeholderText');
+        const downloadLink = document.getElementById('downloadLink'); // Renamed from downloadBtn
+        const messageBox = document.getElementById('messageBox');
+        
+        // HARDCODED TEMPLATE URL (Corrected to be the accessible file name)
+        const FIXED_TEMPLATE_URL = '2ND RUNNERS UP.jpg';
+        
+        // Hardcoded optimal text styles for the template
+        const FONT_SIZE_PX = 60; 
+        const Y_POS_PERCENT = 47; // Vertical position 
+        const FONT_COLOR = '#013460'; // Dark blue/indigo
+
+        /**
+         * Utility function to toggle the download link state.
+         * @param {boolean} enable - True to enable the link, False to disable.
+         */
+        function toggleDownloadLink(enable) {
+            if (enable) {
+                downloadLink.style.pointerEvents = 'auto';
+                downloadLink.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                downloadLink.style.pointerEvents = 'none';
+                downloadLink.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Shows an error or success message in the designated box.
+         * @param {string} message - The text to display.
+         * @param {boolean} isError - True for error (red), false for success (green).
+         */
+        function showMessage(message, isError = true) {
+            messageBox.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+            if (isError) {
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+            } else {
+                messageBox.classList.add('bg-green-100', 'text-green-700');
+            }
+        }
+
+        /**
+         * Loads the fixed image file into the templateImage object.
+         */
+        function loadFixedTemplate() {
+            placeholderText.classList.remove('hidden');
+            toggleDownloadLink(false);
+
+            templateImage.onload = () => {
+                // Set canvas dimensions to match the image
+                canvas.width = templateImage.width;
+                canvas.height = templateImage.height;
+                isTemplateLoaded = true;
+                toggleDownloadLink(true);
+                drawCertificate();
+                placeholderText.classList.add('hidden');
+                showMessage('Certificate template loaded successfully. Enter your full name.', false);
+            };
+            
+            templateImage.onerror = () => {
+                isTemplateLoaded = false;
+                toggleDownloadLink(false);
+                showMessage('Error loading the certificate template image. Please check the console for details.', true);
+                placeholderText.textContent = "Error: Template image failed to load.";
+            };
+
+            // Start loading the image
+            templateImage.src = FIXED_TEMPLATE_URL;
+        }
+
+        /**
+         * Draws the template image and the user's name onto the canvas.
+         */
+        function drawCertificate() {
+            if (!isTemplateLoaded) {
+                return;
+            }
+
+            // We use .toUpperCase() here to match the style of the existing template text
+            const userName = document.getElementById('userName').value.trim().toUpperCase(); 
+            
+            // 1. Clear and Draw Template
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+
+            if (userName.length === 0) {
+                // No name entered, just show the template
+                toggleDownloadLink(false);
+                return;
+            }
+            
+            // Check if email is valid to enable link (since it's required for download)
+            const userEmail = document.getElementById('userEmail').value.trim();
+            if (userName.length > 2 && userEmail.includes('@') && userEmail.includes('.')) {
+                toggleDownloadLink(true);
+            } else {
+                toggleDownloadLink(false);
+            }
+
+            // 2. Configure Text Style using hardcoded constants
+            const yPosition = (canvas.height * Y_POS_PERCENT) / 100;
+            const xPosition = canvas.width / 2;
+
+            // Use a bold, professional font that suits the certificate style
+            ctx.font = `bold ${FONT_SIZE_PX}px Open Sans, serif`; 
+            ctx.fillStyle = FONT_COLOR;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // 3. Draw the Name
+            ctx.fillText(userName, xPosition, yPosition);
+
+            // Hide error message if name is being drawn
+            messageBox.classList.add('hidden');
+        }
+
+        /**
+         * Initiates the download of the canvas content as a PNG image.
+         */
+        function downloadCertificate() {
+            const userName = document.getElementById('userName').value.trim();
+            const userEmail = document.getElementById('userEmail').value.trim();
+
+            if (!isTemplateLoaded) {
+                showMessage('The certificate template is not loaded.');
+                return;
+            }
+
+            if (userName.length < 3) {
+                showMessage('Please enter your full name before downloading.');
+                return;
+            }
+            
+            // Simple email validation
+            if (!userEmail || !userEmail.includes('@') || !userEmail.includes('.')) {
+                showMessage('Please enter a valid email ID for documentation purposes.');
+                return;
+            }
+
+            // Ensure the final rendering is on the canvas
+            drawCertificate();
+
+            // Create a temporary link element for downloading
+            const link = document.createElement('a');
+            link.download = `IEMPOWER_Certificate_${userName.replace(/\s/g, '_')}.png`;
+            // Set the href attribute to the generated image data URL
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showMessage('Certificate downloaded successfully!', false);
+        }
+        
+        // Add event listener to email input to re-check download readiness
+        document.getElementById('userEmail').addEventListener('input', drawCertificate);
+
+        window.onload = function() {
+            // Load the fixed template when the page loads
+            loadFixedTemplate();
+        }
+    </script>
+</body>
+</html>
